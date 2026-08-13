@@ -56,8 +56,8 @@ class SliceWorker(QtCore.QThread):
     def run(self):
         try:
             prepared = sc.prepare_mesh(self.mesh, self.params)
-            if self.params.method == "crossed":
-                slices = sc.slice_crossed(prepared, self.params)
+            if self.params.method == "skeleton":
+                slices = sc.slice_skeleton(prepared, self.params)
             else:
                 slices = sc.slice_stacked(prepared, self.params)
             self.done.emit(slices, prepared)
@@ -134,7 +134,7 @@ class MainWindow(QtWidgets.QMainWindow):
         form.setSpacing(8)
 
         self.cmb_method = QtWidgets.QComboBox()
-        self.cmb_method.addItems(["Tranches empilées", "Emboîtement en croix"])
+        self.cmb_method.addItems(["Tranches empilées", "Squelette (colonne + côtes)"])
         self.cmb_method.currentIndexChanged.connect(self._on_method_change)
         form.addRow("Méthode", self.cmb_method)
 
@@ -144,11 +144,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.spn_n = QtWidgets.QSpinBox()
         self.spn_n.setRange(1, 200); self.spn_n.setValue(12)
-        form.addRow("Nb tranches", self.spn_n)
+        form.addRow("Nb tranches / côtes", self.spn_n)
 
         self.spn_ny = QtWidgets.QSpinBox()
-        self.spn_ny.setRange(1, 200); self.spn_ny.setValue(8)
-        self.row_ny_label = QtWidgets.QLabel("Nb tranches (2e axe)")
+        self.spn_ny.setRange(1, 5); self.spn_ny.setValue(1)
+        self.row_ny_label = QtWidgets.QLabel("Nb colonnes")
         form.addRow(self.row_ny_label, self.spn_ny)
 
         self.spn_thick = QtWidgets.QDoubleSpinBox()
@@ -307,7 +307,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # ----------------------------------------------------------- logique
     def _params(self) -> sc.SliceParams:
-        method = "crossed" if self.cmb_method.currentIndex() == 1 else "stacked"
+        method = "skeleton" if self.cmb_method.currentIndex() == 1 else "stacked"
         size = self.spn_size.value() or None
         return sc.SliceParams(
             method=method,
@@ -324,10 +324,13 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
     def _on_method_change(self):
-        crossed = self.cmb_method.currentIndex() == 1
-        self.spn_ny.setVisible(crossed)
-        self.row_ny_label.setVisible(crossed)
-        self.cmb_axis.setEnabled(not crossed)
+        skeleton = self.cmb_method.currentIndex() == 1
+        # "Nb colonnes" seulement pour le squelette
+        self.spn_ny.setVisible(skeleton)
+        self.row_ny_label.setVisible(skeleton)
+        # axe d'empilement + tige : seulement pour l'empilé
+        self.cmb_axis.setEnabled(not skeleton)
+        self.chk_dowel.setVisible(not skeleton)
 
     def _auto_recompute(self, *_):
         if self.chk_auto.isChecked():
@@ -370,9 +373,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.prepared = prepared
         na = sum(1 for s in slices if s.group == "A")
         nb = sum(1 for s in slices if s.group == "B")
-        txt = f"{len(slices)} tranches"
+        txt = f"{len(slices)} pièces" if nb else f"{len(slices)} tranches"
         if nb:
-            txt += f" (A:{na} / B:{nb})"
+            txt += f"   ·   {na} colonne(s) + {nb} côtes"
         self.lbl_info.setText(txt)
         self.btn_apply.setEnabled(True)
         self._refresh_view()

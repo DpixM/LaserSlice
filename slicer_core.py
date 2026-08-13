@@ -3,7 +3,8 @@ slicer_core.py — Moteur de découpe 3D -> tranches SVG pour découpe laser.
 
 Deux méthodes :
   - "stacked"  : couches parallèles empilées le long d'un axe (effet topographie).
-  - "crossed"  : tranches en croix (X + Y) avec fentes d'emboîtement (egg-crate).
+  - "skeleton" : 1+ colonne(s) vertébrale(s) + côtes, avec joints à mi-bois
+                 (comme les puzzles bois 3D : ça tient sans colle).
 
 Le module est pur Python (trimesh + shapely + numpy) et ne dépend d'aucune
 interface. Il est testable en headless : il produit de vrais fichiers SVG.
@@ -30,10 +31,10 @@ from shapely import affinity
 @dataclass
 class SliceParams:
     """Tous les réglages de découpe."""
-    method: str = "stacked"          # "stacked" | "crossed"
+    method: str = "stacked"          # "stacked" | "skeleton"
     axis: str = "z"                  # axe d'empilement pour "stacked" (x|y|z)
-    n_slices: int = 12               # nb de tranches (stacked) ou par axe (crossed)
-    n_slices_y: Optional[int] = None # crossed : nb de tranches sur le 2e axe (déf = n_slices)
+    n_slices: int = 12               # nb de tranches (stacked) ou de côtes (skeleton)
+    n_slices_y: Optional[int] = None # skeleton : nb de colonnes vertébrales (déf = 1)
     thickness: float = 3.0           # épaisseur du matériau (mm)
     kerf: float = 0.15               # largeur du trait laser (mm)
     fit: float = 0.05                # jeu d'ajustement des fentes (mm) : + = plus lâche
@@ -267,59 +268,74 @@ def _add_dowel_holes(poly, params: SliceParams, centers: Sequence[Tuple[float, f
 
 
 # -----------------------------------------------------------------------------
-# Méthode "croisée" (egg-crate) avec fentes d'emboîtement
+# Méthode "squelette" : 1+ colonne(s) vertébrale(s) + côtes (joints mi-bois)
 # -----------------------------------------------------------------------------
 
-def slice_crossed(mesh: trimesh.Trimesh, params: SliceParams) -> List[Slice]:
-    """Tranches selon X (groupe A) et Y (groupe B). Les A sont fendues par le haut,
-    les B par le bas ; elles se glissent verticalement l'une dans l'autre."""
-    nx = params.n_slices
-    ny = params.n_slices_y or params.n_slices
-    bx = mesh.bounds
-    xlo, xhi = bx[0][0], bx[1][0]
-    ylo, yhi = bx[0][1], bx[1][1]
-    xs = _interior_positions(xlo, xhi, nx)
-    ys = _interior_positions(ylo, yhi, ny)
+def slice_skeleton(mesh: trimesh.Trimesh, params: SliceParams) -> List[Slice]:
+    """Construit un squelette comme les vrais puzzles bois 3D :
 
-    # Sections brutes
-    x_polys = {x: section_polygon(mesh, "x", x) for x in xs}
-    y_polys = {y: section_polygon(mesh, "y", y) for y in ys}
-    x_polys = {k: v for k, v in x_polys.items() if v and not v.is_empty}
-    y_polys = {k: v for k, v in y_polys.items() if v and not v.is_empty}
+      - COLONNE(S) : une (ou plusieurs) planche(s) verticale(s) le long du plus
+        grand axe du corps ; elles portent le profil du modèle. Fendues par le HAUT.
+      - CÔTES : des sections perpendiculaires réparties sur la longueur ; elles
+        donnent le volume. Fendues par le BAS.
+
+    À chaque croisement, colonne et côte se glissent l'une dans l'autre (joint à
+    mi-bois) : les fentes se rejoignent à mi-hauteur, ça tient sans colle.
+    """
+    ext = mesh.extents
+    # Grand axe horizontal = longueur du corps ; l'autre horizontal = largeur.
+    length_axis = "x" if ext[0] >= ext[1] else "y"
+    width_axis = "y" if length_axis == "x" else "x"
+    li = "xyz".index(length_axis)
+    wi = "xyz".index(width_axis)
+    bx = mesh.bounds
+
+    n_ribs = max(1, params.n_slices)
+    n_spines = max(1, params.n_slices_y or 1)
+
+    rib_pos = _interior_positions(bx[0][li], bx[1][li], n_ribs)
+    if n_spines == 1:
+        spine_pos = [0.0]                                   # colonne centrale
+    else:
+        spine_pos = _interior_positions(bx[0][wi], bx[1][wi], n_spines)
+
+    # Sections brutes (on jette les vides)
+    spines = {s: section_polygon(mesh, width_axis, s) for s in spine_pos}
+    ribs = {r: section_polygon(mesh, length_axis, r) for r in rib_pos}
+    spines = {k: v for k, v in spines.items() if v and not v.is_empty}
+    ribs = {k: v for k, v in ribs.items() if v and not v.is_empty}
 
     w = params.slot_width
 
-    # Fentes dans les tranches X (locales : u=Y, v=Z) : encoche par le HAUT à u=y
-    for x, poly in list(x_polys.items()):
-        for y in y_polys:
-            iv = _vertical_interval(poly, y)
+    # Colonnes (local u = longueur, v = hauteur) : encoche par le HAUT à chaque côte.
+    for sp, poly in list(spines.items()):
+        for rp in ribs:
+            iv = _vertical_interval(poly, rp)
             if iv is None:
                 continue
             zc = 0.5 * (iv[0] + iv[1])
-            slot = box(y - w / 2, zc, y + w / 2, iv[1] + 1.0)  # du milieu vers le haut
-            poly = poly.difference(slot)
-        x_polys[x] = poly
+            poly = poly.difference(box(rp - w / 2, zc, rp + w / 2, iv[1] + 1.0))
+        spines[sp] = poly
 
-    # Fentes dans les tranches Y (locales : u=X, v=Z) : encoche par le BAS à u=x
-    for y, poly in list(y_polys.items()):
-        for x in x_polys:
-            iv = _vertical_interval(poly, x)
+    # Côtes (local u = largeur, v = hauteur) : encoche par le BAS à chaque colonne.
+    for rp, poly in list(ribs.items()):
+        for sp in spines:
+            iv = _vertical_interval(poly, sp)
             if iv is None:
                 continue
             zc = 0.5 * (iv[0] + iv[1])
-            slot = box(x - w / 2, iv[0] - 1.0, x + w / 2, zc)   # du bas vers le milieu
-            poly = poly.difference(slot)
-        y_polys[y] = poly
+            poly = poly.difference(box(sp - w / 2, iv[0] - 1.0, sp + w / 2, zc))
+        ribs[rp] = poly
 
     slices: List[Slice] = []
-    for i, x in enumerate(sorted(x_polys)):
-        s = Slice(polygon=x_polys[x], axis="x", pos=float(x), index=i, group="A",
-                  label=f"A{i+1:02d}")
+    for i, sp in enumerate(sorted(spines)):
+        s = Slice(polygon=spines[sp], axis=width_axis, pos=float(sp), index=i,
+                  group="A", label=f"C{i+1:02d}")          # C = Colonne
         s._thickness = params.thickness
         slices.append(s)
-    for j, y in enumerate(sorted(y_polys)):
-        s = Slice(polygon=y_polys[y], axis="y", pos=float(y), index=j, group="B",
-                  label=f"B{j+1:02d}")
+    for j, rp in enumerate(sorted(ribs)):
+        s = Slice(polygon=ribs[rp], axis=length_axis, pos=float(rp), index=j,
+                  group="B", label=f"R{j+1:02d}")          # R = côte (Rib)
         s._thickness = params.thickness
         slices.append(s)
     return slices
@@ -362,8 +378,8 @@ def _vertical_interval(poly, u: float) -> Optional[Tuple[float, float]]:
 
 def generate_slices(mesh: trimesh.Trimesh, params: SliceParams) -> List[Slice]:
     prepared = prepare_mesh(mesh, params)
-    if params.method == "crossed":
-        return slice_crossed(prepared, params)
+    if params.method == "skeleton":
+        return slice_skeleton(prepared, params)
     return slice_stacked(prepared, params)
 
 

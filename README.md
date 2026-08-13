@@ -29,11 +29,14 @@ propre fichier, il est sans danger).
 Deux façons de découper ton modèle :
 
 - **Tranches empilées** — des couches parallèles à empiler (effet topographie /
-  courbes de niveau). Option : trous d'alignement pour glisser une tige.
-- **Emboîtement en croix (egg-crate)** — des tranches dans deux directions (X et
-  Y) avec des fentes qui se glissent l'une dans l'autre, comme les animaux en
-  contreplaqué. Le groupe A est fendu par le haut, le groupe B par le bas ; les
-  fentes se rejoignent exactement à mi-hauteur.
+  courbes de niveau). Une **tige d'assemblage** (trous alignés sur toutes les
+  couches) est ajoutée par défaut pour que la pile tienne bien droite.
+- **Squelette (colonne + côtes)** — comme les vrais puzzles bois 3D (animaux,
+  avions…). L'appli repère le grand axe du corps, place une **colonne
+  vertébrale** au profil du modèle, puis y plante des **côtes** perpendiculaires.
+  À chaque croisement, un **joint à mi-bois** (colonne fendue par le haut, côte
+  par le bas, fentes qui se rejoignent à mi-hauteur) fait tenir l'ensemble
+  **sans colle**. Tu peux mettre plusieurs colonnes pour les corps larges.
 
 **Aperçu en direct dans l'appli :**
 
