@@ -90,6 +90,13 @@ class Slice:
         # extrude_polygon crée l'objet dans le plan XY, extrudé en +Z, base en z=0.
         # On le replace dans l'orientation/position de la tranche.
         m.apply_transform(self._placement_matrix())
+        # La matrice des colonnes (axe Y) est une réflexion -> elle retourne les
+        # normales, ce qui rendait la pièce quasi noire (invisible) à l'affichage.
+        # On remet les normales cohérentes et vers l'extérieur.
+        try:
+            m.fix_normals()
+        except Exception:
+            pass
         return m
 
     # -- interne ------------------------------------------------------------
