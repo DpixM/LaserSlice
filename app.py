@@ -101,6 +101,22 @@ class OrbitView(gl.GLViewWidget):
             pass
 
 
+class NumSpin(QtWidgets.QDoubleSpinBox):
+    """Champ numérique qui accepte le point ET la virgule comme séparateur
+    décimal (et affiche avec un point) — plus besoin de taper une virgule."""
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.setLocale(QtCore.QLocale.c())      # point décimal
+        self.setKeyboardTracking(False)
+
+    def validate(self, text, pos):
+        return super().validate(text.replace(",", "."), pos)
+
+    def valueFromText(self, text):
+        return super().valueFromText(text.replace(",", "."))
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -134,6 +150,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.btn_import = QtWidgets.QPushButton("📂  Importer un modèle 3D")
         self.btn_export = QtWidgets.QPushButton("💾  Exporter les planches SVG")
         self.btn_calib = QtWidgets.QPushButton("🎯  Exporter la pièce de calibration")
+        self.btn_import.setToolTip("Charge un fichier 3D (STL, OBJ, PLY, GLB…).\nAstuce : tu peux aussi glisser-déposer le fichier dans la fenêtre.")
+        self.btn_export.setToolTip("Enregistre les planches SVG à découper au laser.")
+        self.btn_calib.setToolTip("Exporte une pièce de test avec des fentes de jeu croissant,\npour trouver le bon serrage sur ta machine.")
         self.btn_import.clicked.connect(self.on_import)
         self.btn_export.clicked.connect(self.on_export)
         self.btn_calib.clicked.connect(self.on_export_calibration)
@@ -188,34 +207,34 @@ class MainWindow(QtWidgets.QMainWindow):
         self.row_ny_label = QtWidgets.QLabel("Nb colonnes")
         form.addRow(self.row_ny_label, self.spn_ny)
 
-        self.spn_thick = QtWidgets.QDoubleSpinBox()
+        self.spn_thick = NumSpin()
         self.spn_thick.setRange(0.1, 50); self.spn_thick.setValue(3.0)
         self.spn_thick.setSuffix(" mm"); self.spn_thick.setSingleStep(0.1)
         form.addRow("Épaisseur matière", self.spn_thick)
 
-        self.spn_kerf = QtWidgets.QDoubleSpinBox()
+        self.spn_kerf = NumSpin()
         self.spn_kerf.setRange(0.0, 2.0); self.spn_kerf.setValue(0.15)
         self.spn_kerf.setSuffix(" mm"); self.spn_kerf.setSingleStep(0.01)
         self.spn_kerf.setDecimals(2)
         form.addRow("Kerf (trait laser)", self.spn_kerf)
 
-        self.spn_fit = QtWidgets.QDoubleSpinBox()
+        self.spn_fit = NumSpin()
         self.spn_fit.setRange(-0.5, 0.5); self.spn_fit.setValue(0.05)
         self.spn_fit.setSuffix(" mm"); self.spn_fit.setSingleStep(0.01)
         self.spn_fit.setDecimals(2)
         form.addRow("Jeu d'ajustement", self.spn_fit)
 
-        self.spn_size = QtWidgets.QDoubleSpinBox()
+        self.spn_size = NumSpin()
         self.spn_size.setRange(0, 2000); self.spn_size.setValue(0)
         self.spn_size.setSuffix(" mm"); self.spn_size.setSpecialValueText("(taille d'origine)")
         form.addRow("Redim. (+ grande dim)", self.spn_size)
 
-        self.spn_sheet_w = QtWidgets.QDoubleSpinBox()
+        self.spn_sheet_w = NumSpin()
         self.spn_sheet_w.setRange(10, 3000); self.spn_sheet_w.setValue(300)
         self.spn_sheet_w.setSuffix(" mm")
         form.addRow("Planche largeur", self.spn_sheet_w)
 
-        self.spn_sheet_h = QtWidgets.QDoubleSpinBox()
+        self.spn_sheet_h = NumSpin()
         self.spn_sheet_h.setRange(10, 3000); self.spn_sheet_h.setValue(200)
         self.spn_sheet_h.setSuffix(" mm")
         form.addRow("Planche hauteur", self.spn_sheet_h)
@@ -268,6 +287,27 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cmb_method.currentIndexChanged.connect(self._auto_recompute)
         self.cmb_axis.currentIndexChanged.connect(self._auto_recompute)
         self.chk_dowel.stateChanged.connect(self._auto_recompute)
+
+        # --- bulles d'aide (au survol de la souris) ---
+        self.cmb_method.setToolTip(
+            "Comment découper le modèle :\n"
+            "• Tranches empilées : couches horizontales à empiler (effet topographie).\n"
+            "• Squelette : 1 colonne + des côtes qui s'emboîtent (comme les puzzles bois).")
+        self.cmb_axis.setToolTip("Sens d'empilement des couches (méthode Tranches empilées uniquement).")
+        self.spn_n.setToolTip("Nombre de tranches (empilé) ou de côtes (squelette).\nPlus élevé = plus détaillé, mais plus de pièces à assembler.")
+        self.spn_ny.setToolTip("Nombre de colonnes vertébrales (squelette).\n1 pour un corps fin, 2-3 pour un corps large.")
+        self.spn_thick.setToolTip("Épaisseur réelle de ta planche (contreplaqué/MDF).\nMesure-la au pied à coulisse. Elle fixe la largeur des fentes.")
+        self.spn_kerf.setToolTip("Largeur du trait brûlé par le laser (~0,1 à 0,3 mm).\nSert à ajuster la largeur des fentes pour un bon serrage.")
+        self.spn_fit.setToolTip("Serrage des fentes : + = plus lâche, − = plus serré.\nRègle-le grâce à la pièce de calibration.")
+        self.spn_size.setToolTip("Redimensionne le modèle : sa plus grande dimension = cette valeur (mm).\n0 = garde la taille d'origine.")
+        self.spn_sheet_w.setToolTip("Largeur de ta planche / matériau (pour ranger les pièces à découper).")
+        self.spn_sheet_h.setToolTip("Hauteur de ta planche / matériau.")
+        self.chk_dowel.setToolTip("Ajoute une tige d'assemblage : des trous alignés sur toutes\nles couches pour qu'elles tiennent bien droit (méthode empilée).")
+        self.chk_ghost.setToolTip("Affiche le modèle d'origine en transparence (contrôle qualité).")
+        self.chk_slices.setToolTip("Affiche ou masque les pièces découpées dans la vue 3D.")
+        self.sld_explode.setToolTip("Écarte les pièces pour voir comment elles s'assemblent.")
+        self.btn_apply.setToolTip("Recalcule les pièces maintenant.")
+        self.chk_auto.setToolTip("Recalcule automatiquement dès qu'un réglage change.")
 
         self.cmb_method.setCurrentIndex(1)   # démarre directement en mode Squelette
         self._on_method_change()
@@ -439,6 +479,8 @@ class MainWindow(QtWidgets.QMainWindow):
         txt = f"{len(slices)} pièces" if nb else f"{len(slices)} tranches"
         if nb:
             txt += f"   ·   {na} colonne(s) + {nb} côtes"
+            if nb < self.spn_n.value():
+                txt += f"  (limité à {nb} : côtes trop serrées pour l'épaisseur)"
         self.lbl_info.setText(txt)
         self.btn_apply.setEnabled(True)
         self._refresh_view()

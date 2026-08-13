@@ -311,7 +311,7 @@ def slice_skeleton(mesh: trimesh.Trimesh, params: SliceParams) -> List[Slice]:
     # Sécurité anti-chevauchement : si on demande trop de pièces pour la taille du
     # modèle, les encoches fusionnent et la pièce part en bouillie. On limite donc
     # le nombre pour garder un espacement >= 1.8 × la largeur de fente.
-    min_gap = max(params.slot_width * 1.8, 1e-6)
+    min_gap = max(params.slot_width + 0.6, 1e-6)   # largeur de fente + paroi mini 0,6 mm
     n_ribs = max(1, min(n_ribs, int((bx[1][li] - bx[0][li]) / min_gap) or 1))
     if n_spines > 1:
         n_spines = max(1, min(n_spines, int((bx[1][wi] - bx[0][wi]) / min_gap) or 1))
