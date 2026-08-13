@@ -107,14 +107,21 @@ class NumSpin(QtWidgets.QDoubleSpinBox):
 
     def __init__(self, *a, **k):
         super().__init__(*a, **k)
-        self.setLocale(QtCore.QLocale.c())      # point décimal
-        self.setKeyboardTracking(False)
+        try:
+            self.setLocale(QtCore.QLocale.c())      # point décimal natif
+        except Exception:
+            pass
+        le = self.lineEdit()
+        if le is not None:
+            le.textChanged.connect(self._swap_comma)
 
-    def validate(self, text, pos):
-        return super().validate(text.replace(",", "."), pos)
-
-    def valueFromText(self, text):
-        return super().valueFromText(text.replace(",", "."))
+    def _swap_comma(self, text):
+        # remplace la virgule par un point pendant la saisie (sans boucle infinie)
+        if "," in text:
+            le = self.lineEdit()
+            pos = le.cursorPosition()
+            le.setText(text.replace(",", "."))
+            le.setCursorPosition(pos)
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -641,4 +648,18 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception:
+        # Écrit l'erreur dans un fichier à côté de l'appli pour pouvoir la diagnostiquer.
+        log = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "laserslice_erreur.txt")
+        try:
+            with open(log, "w", encoding="utf-8") as f:
+                f.write(traceback.format_exc())
+        except Exception:
+            pass
+        sys.stderr.write("\n" + traceback.format_exc() + "\n")
+        raise
