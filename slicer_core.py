@@ -293,6 +293,14 @@ def slice_skeleton(mesh: trimesh.Trimesh, params: SliceParams) -> List[Slice]:
     n_ribs = max(1, params.n_slices)
     n_spines = max(1, params.n_slices_y or 1)
 
+    # Sécurité anti-chevauchement : si on demande trop de pièces pour la taille du
+    # modèle, les encoches fusionnent et la pièce part en bouillie. On limite donc
+    # le nombre pour garder un espacement >= 1.8 × la largeur de fente.
+    min_gap = max(params.slot_width * 1.8, 1e-6)
+    n_ribs = max(1, min(n_ribs, int((bx[1][li] - bx[0][li]) / min_gap) or 1))
+    if n_spines > 1:
+        n_spines = max(1, min(n_spines, int((bx[1][wi] - bx[0][wi]) / min_gap) or 1))
+
     rib_pos = _interior_positions(bx[0][li], bx[1][li], n_ribs)
     if n_spines == 1:
         spine_pos = [0.0]                                   # colonne centrale
