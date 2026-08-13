@@ -511,13 +511,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _refresh_view(self, *_):
         self._clear_gl()
-        # ghost
-        if self.chk_ghost.isChecked() and self.prepared is not None:
-            md = gl.MeshData(vertexes=self.prepared.vertices, faces=self.prepared.faces)
-            ghost = gl.GLMeshItem(meshdata=md, smooth=True, color=COLOR_GHOST,
-                                  glOptions="translucent", shader="shaded")
-            self.view.addItem(ghost); self._gl_items.append(ghost)
-        # tranches
+        # 1) Les PIÈCES opaques d'abord (elles écrivent le tampon de profondeur).
         if self.chk_slices.isChecked() and self.slices:
             explode = self.sld_explode.value() / 100.0
             for m, group in sc.assembled_meshes(self.slices, explode=explode):
@@ -526,7 +520,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 item = gl.GLMeshItem(meshdata=md, smooth=False, color=color,
                                      glOptions="opaque", shader="shaded",
                                      drawEdges=True, edgeColor=(0, 0, 0, 0.4))
+                item.setDepthValue(0)
                 self.view.addItem(item); self._gl_items.append(item)
+        # 2) Le modèle fantôme translucide EN DERNIER, pour qu'il se fonde
+        #    par-dessus sans faire clignoter les pièces qui sont à l'intérieur.
+        if self.chk_ghost.isChecked() and self.prepared is not None:
+            md = gl.MeshData(vertexes=self.prepared.vertices, faces=self.prepared.faces)
+            ghost = gl.GLMeshItem(meshdata=md, smooth=True, color=COLOR_GHOST,
+                                  glOptions="translucent", shader="shaded")
+            ghost.setDepthValue(10)
+            self.view.addItem(ghost); self._gl_items.append(ghost)
 
     # ----------------------------------------------------------- aperçu 2D (livre)
     def _on_tab_change(self, idx):
