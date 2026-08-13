@@ -1,58 +1,80 @@
-# LaserSlice — modèle 3D → tranches SVG pour découpe laser
+# 🪚 LaserSlice
 
-Petite appli bureau : tu importes un modèle 3D (STL/OBJ/PLY/GLB…), l'appli le
-« tranche » et génère les **fichiers SVG** à découper au laser, avec les
-**encoches d'emboîtement** et la **numérotation** pour savoir quelle pièce va où.
+**Transforme un modèle 3D en pièces à découper au laser.**
+Tu importes un fichier 3D (STL, OBJ, PLY, GLB…), LaserSlice le « tranche » et te
+sort les **fichiers SVG** prêts à couper — avec les **encoches d'emboîtement** et
+la **numérotation** pour savoir quelle pièce va où.
 
-Deux méthodes de découpe :
+---
 
-- **Tranches empilées** — couches parallèles à empiler (effet topographie).
-  Option : trous d'alignement pour une tige.
-- **Emboîtement en croix (egg-crate)** — tranches dans deux directions (X et Y)
-  avec des fentes qui se glissent l'une dans l'autre, comme les animaux en
-  contreplaqué. Le groupe A est fendu par le haut, le groupe B par le bas ;
-  les fentes se rejoignent exactement à mi-hauteur car les deux tranches
-  traversent la même ligne verticale du modèle.
+## 🚀 Démarrage en 30 secondes (Windows)
 
-## Aperçu en direct
+1. **Télécharge le projet** : sur la page GitHub, bouton vert **`Code`** →
+   **`Download ZIP`**. Décompresse le dossier où tu veux (ton Bureau, par ex.).
+2. **Double-clique sur `Lancer LaserSlice.bat`**.
+3. C'est tout. 🎉
 
-- **Vue 3D** : le modèle d'origine en semi-transparent (« ghost ») avec les
-  tranches solides par-dessus. Le ghost sert de contrôle qualité : si tu mets
-  trop peu de tranches, tu vois le modèle « dépasser ». Un curseur **Éclaté**
-  écarte les pièces pour comprendre l'assemblage.
-- **Vue Planches (2D)** : les pièces mises à plat, nestées sur les planches,
-  numérotées — exactement ce qui sera découpé.
+> La **première fois**, une fenêtre noire s'ouvre et installe tout ce qu'il faut
+> (Python si besoin, puis les composants) — ça prend quelques minutes, c'est
+> normal. Les fois **suivantes**, l'appli démarre en quelques secondes.
 
-## Réglages qui comptent pour un bon emboîtement
+Si Windows affiche un avertissement « Windows a protégé votre ordinateur » :
+clique sur **Informations complémentaires** → **Exécuter quand même** (c'est ton
+propre fichier, il est sans danger).
 
-- **Épaisseur matière** : l'épaisseur réelle de ton contreplaqué/MDF (mesure au
-  pied à coulisse, un « 3 mm » fait souvent 2.8–3.2).
+---
+
+## 🧩 À quoi ça sert concrètement
+
+Deux façons de découper ton modèle :
+
+- **Tranches empilées** — des couches parallèles à empiler (effet topographie /
+  courbes de niveau). Option : trous d'alignement pour glisser une tige.
+- **Emboîtement en croix (egg-crate)** — des tranches dans deux directions (X et
+  Y) avec des fentes qui se glissent l'une dans l'autre, comme les animaux en
+  contreplaqué. Le groupe A est fendu par le haut, le groupe B par le bas ; les
+  fentes se rejoignent exactement à mi-hauteur.
+
+**Aperçu en direct dans l'appli :**
+
+- **Vue 3D** : ton modèle en semi-transparent (« ghost ») avec les tranches
+  solides par-dessus. Si tu mets trop peu de tranches, tu vois le modèle
+  « dépasser » → contrôle qualité immédiat. Un curseur **Éclaté** écarte les
+  pièces pour comprendre l'assemblage.
+- **Vue Planches (2D)** : les pièces mises à plat et numérotées, exactement ce
+  qui sera découpé.
+
+---
+
+## ⚙️ Les réglages qui comptent
+
+- **Épaisseur matière** : l'épaisseur réelle de ton contreplaqué / MDF (mesure au
+  pied à coulisse — un « 3 mm » fait souvent 2.8–3.2).
 - **Kerf** : la largeur du trait que ton laser brûle (~0.1–0.3 mm). La largeur
   des fentes est calculée comme `épaisseur − kerf + jeu`.
-- **Jeu d'ajustement** : + = plus lâche, − = plus serré.
+- **Jeu d'ajustement** : `+` = plus lâche, `−` = plus serré.
 
-Avant de lancer un gros modèle, exporte la **pièce de calibration** (bouton en
-haut) : une série de fentes de jeu croissant. Découpe-la, teste laquelle reçoit
+💡 **Astuce** : avant un gros modèle, exporte la **pièce de calibration** (bouton
+en haut) — une série de fentes de jeu croissant. Découpe-la, vois laquelle reçoit
 ta languette avec le bon serrage, et reporte la valeur dans « Jeu d'ajustement ».
 
-## Installation
+---
+
+## 🛠️ Installation manuelle (Mac / Linux, ou si tu préfères)
 
 ```bash
 pip install -r requirements.txt
-```
-
-(Sur Linux, il faut les libs système OpenGL/Qt habituelles :
-`libgl1 libegl1 libxkbcommon0`.)
-
-## Lancer
-
-```bash
 python app.py
 ```
 
-## Utilisation en ligne de commande (sans interface)
+Sur Linux, installe aussi les libs système habituelles :
+`libgl1 libegl1 libxkbcommon0`.
 
-Le moteur `slicer_core.py` est autonome et scriptable :
+---
+
+## 🤖 Utilisation sans interface (scriptable)
+
+Le moteur `slicer_core.py` est autonome :
 
 ```python
 import slicer_core as sc
@@ -71,21 +93,28 @@ sc.export_calibration_svg(params, "sortie/calibration.svg")
 print(fichiers)
 ```
 
-## Fichiers
+---
 
-- `slicer_core.py` — moteur (chargement, slicing, fentes, nesting, export SVG). Pur Python, testable en headless.
-- `app.py` — interface PySide6 (barre du haut, panneau paramètres, vue 3D + vue planches).
-- `test_engine.py` — vérifie le moteur et rend les SVG en PNG.
-- `requirements.txt`
+## 📁 Contenu du projet
 
-## Limites connues / pistes d'amélioration
+| Fichier | Rôle |
+|---|---|
+| **`Lancer LaserSlice.bat`** | Le lanceur double-clic (Windows) — installe et démarre tout. |
+| `app.py` | L'interface (barre du haut, panneau réglages, vue 3D + vue planches). |
+| `slicer_core.py` | Le moteur : chargement, slicing, fentes, nesting, export SVG. Pur Python. |
+| `test_engine.py` | Vérifie le moteur et rend les SVG en PNG. |
+| `requirements.txt` | La liste des composants à installer. |
+
+---
+
+## 📌 Limites connues / pistes d'amélioration
 
 - Les fentes croisées visent le milieu du plus long segment vertical : parfait
-  pour des formes convexes/pleines, approximatif sur des formes très concaves
-  ou creuses (une tranche peut alors nécessiter un ajustement manuel).
+  pour des formes convexes/pleines, approximatif sur des formes très concaves ou
+  creuses (une tranche peut alors nécessiter un ajustement manuel).
 - Le nesting est un simple rangement « en étagères » ; un vrai nesting optimisé
   gagnerait de la matière.
-- Export SVG uniquement (compatible LightBurn, Inkscape, LaserGRBL…). Le DXF
+- Export **SVG** uniquement (compatible LightBurn, Inkscape, LaserGRBL…). Le DXF
   serait un ajout facile via `ezdxf` si besoin.
-- Les traits de coupe sont exportés à leur taille réelle (pas de compensation
-  kerf sur les contours, seulement sur les fentes) — c'est la convention usuelle.
+- Les traits de coupe sont exportés à leur taille réelle (compensation kerf sur
+  les fentes uniquement, pas sur les contours) — c'est la convention usuelle.
