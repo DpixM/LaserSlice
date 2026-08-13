@@ -1,0 +1,10 @@
+trimesh>=4.0
+numpy>=1.24
+shapely>=2.0
+networkx>=3.0
+scipy>=1.10
+PySide6>=6.5
+pyqtgraph>=0.13
+PyOpenGL>=3.1
+# optionnel : accélère l'affichage OpenGL
+PyOpenGL-accelerate ; platform_system != "Windows"
