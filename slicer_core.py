@@ -227,13 +227,17 @@ def slice_stacked(mesh: trimesh.Trimesh, params: SliceParams) -> List[Slice]:
     n = max(1, int(round(total / t))) if params.n_slices in (None, 0) else params.n_slices
     positions = np.linspace(lo + total / (2 * n), hi - total / (2 * n), n)
 
+    # Fixations : positions de trous FIXES (identiques pour toutes les tranches)
+    # -> une tige verticale traverse toutes les couches et les maintient alignées.
+    centers = _stacked_hole_centers(mesh, params) if params.dowel_holes else []
+
     slices: List[Slice] = []
     for i, pos in enumerate(positions):
         poly = section_polygon(mesh, axis, float(pos))
         if poly is None or poly.is_empty:
             continue
-        if params.dowel_holes:
-            poly = _add_dowel_holes(poly, params)
+        if centers:
+            poly = _add_dowel_holes(poly, params, centers)
         s = Slice(polygon=poly, axis=axis, pos=float(pos), index=i, group="A",
                   label=f"A{i+1:02d}")
         s._thickness = t
@@ -241,13 +245,22 @@ def slice_stacked(mesh: trimesh.Trimesh, params: SliceParams) -> List[Slice]:
     return slices
 
 
-def _add_dowel_holes(poly, params: SliceParams):
-    minx, miny, maxx, maxy = poly.bounds
-    cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
-    off = min(maxx - minx, maxy - miny) * 0.25
-    r = (params.dowel_dia - params.kerf) / 2.0
-    holes = [Point(cx - off, cy).buffer(r), Point(cx + off, cy).buffer(r)]
-    for h in holes:
+def _stacked_hole_centers(mesh: trimesh.Trimesh, params: SliceParams) -> List[Tuple[float, float]]:
+    """Positions (u, v) des trous de tige, dans le plan perpendiculaire à l'axe
+    d'empilement. Le modèle étant centré sur l'origine, ces positions sont les
+    mêmes pour toutes les tranches -> la tige traverse toute la pile bien droite."""
+    cu, _cv = _AXIS_COLS[params.axis]
+    half_u = float(mesh.extents[cu]) / 2.0
+    d = 0.45 * half_u
+    return [(-d, 0.0), (d, 0.0)]
+
+
+def _add_dowel_holes(poly, params: SliceParams, centers: Sequence[Tuple[float, float]]):
+    """Perce des trous de tige aux positions `centers` (communes à toutes les
+    tranches). On ne perce que là où la matière existe réellement."""
+    r = max(0.3, (params.dowel_dia - params.kerf) / 2.0)
+    for cx, cy in centers:
+        h = Point(cx, cy).buffer(r)
         if poly.contains(h):
             poly = poly.difference(h)
     return poly

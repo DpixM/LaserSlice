@@ -183,7 +183,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.spn_sheet_h.setSuffix(" mm")
         form.addRow("Planche hauteur", self.spn_sheet_h)
 
-        self.chk_dowel = QtWidgets.QCheckBox("Trous d'alignement (tige)")
+        self.chk_dowel = QtWidgets.QCheckBox("Tige d'assemblage (trous alignés)")
+        self.chk_dowel.setChecked(True)   # fixations activées par défaut
         form.addRow("", self.chk_dowel)
 
         lay.addLayout(form)
@@ -207,7 +208,7 @@ class MainWindow(QtWidgets.QMainWindow):
         exp_row = QtWidgets.QHBoxLayout()
         exp_row.addWidget(QtWidgets.QLabel("Éclaté"))
         self.sld_explode = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.sld_explode.setRange(0, 200); self.sld_explode.setValue(0)
+        self.sld_explode.setRange(0, 600); self.sld_explode.setValue(0)
         self.sld_explode.valueChanged.connect(self._refresh_view)
         exp_row.addWidget(self.sld_explode)
         lay.addLayout(exp_row)
@@ -245,13 +246,30 @@ class MainWindow(QtWidgets.QMainWindow):
         self.view.addItem(grid)
         self.tabs.addTab(self.view, "Vue 3D")
 
-        # -- onglet planches 2D --
-        self.sheets_area = QtWidgets.QScrollArea()
-        self.sheets_area.setWidgetResizable(True)
-        self.sheets_host = QtWidgets.QWidget()
-        self.sheets_layout = QtWidgets.QVBoxLayout(self.sheets_host)
-        self.sheets_area.setWidget(self.sheets_host)
-        self.tabs.addTab(self.sheets_area, "Planches (2D)")
+        # -- onglet « pièces » : feuilletage façon livre --
+        self.pages_root = QtWidgets.QWidget()
+        self.pages_root.setObjectName("pagesRoot")
+        pv = QtWidgets.QVBoxLayout(self.pages_root)
+        pv.setContentsMargins(0, 0, 0, 8)
+        nav = QtWidgets.QHBoxLayout()
+        nav.setContentsMargins(12, 10, 12, 4)
+        self.btn_prev = QtWidgets.QPushButton("‹"); self.btn_prev.setObjectName("nav")
+        self.btn_next = QtWidgets.QPushButton("›"); self.btn_next.setObjectName("nav")
+        self.lbl_page = QtWidgets.QLabel("—"); self.lbl_page.setObjectName("pageLabel")
+        self.lbl_page.setAlignment(QtCore.Qt.AlignCenter)
+        self.btn_prev.setToolTip("Pièce précédente")
+        self.btn_next.setToolTip("Pièce suivante")
+        self.btn_prev.clicked.connect(lambda: self._flip(-1))
+        self.btn_next.clicked.connect(lambda: self._flip(1))
+        nav.addStretch(1); nav.addWidget(self.btn_prev); nav.addSpacing(14)
+        nav.addWidget(self.lbl_page); nav.addSpacing(14); nav.addWidget(self.btn_next)
+        nav.addStretch(1)
+        pv.addLayout(nav)
+        self.page_view = QSvgWidget()
+        self.page_view.setMinimumHeight(430)
+        pv.addWidget(self.page_view, 1)
+        self._page_index = 0
+        self.tabs.addTab(self.pages_root, "Pièces  📖")
         self.tabs.currentChanged.connect(self._on_tab_change)
 
         self._gl_items = []
@@ -261,11 +279,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setStyleSheet("""
             QMainWindow, QWidget { background: #12151b; color: #e6e6e6;
                                    font-size: 12px; }
-            QFrame#topbar { background: #f4d100; }
-            QFrame#topbar QPushButton { background:#1c1f26; color:#f4d100;
-                border:none; padding:8px 12px; border-radius:6px; font-weight:600; }
-            QFrame#topbar QPushButton:hover { background:#2a2e38; }
-            QFrame#topbar QLabel { color:#1c1f26; font-weight:600; }
+            /* Barre du haut : fond sombre, accents jaunes (bien lisible) */
+            QFrame#topbar { background:#0f1216; border-bottom:2px solid #f4d100; }
+            QFrame#topbar QPushButton { background:#f4d100; color:#141414;
+                border:none; padding:8px 14px; border-radius:6px; font-weight:700; }
+            QFrame#topbar QPushButton:hover { background:#ffe23a; }
+            QFrame#topbar QLabel { color:#f4d100; font-weight:700; font-size:13px; }
             QFrame#params { background:#0b0d11; border-right:1px solid #22262e; }
             QLabel#panelTitle { color:#f4d100; font-weight:700; font-size:13px; }
             QPushButton#apply { background:#2aa5e0; color:white; border:none;
@@ -276,6 +295,14 @@ class MainWindow(QtWidgets.QMainWindow):
             QTabBar::tab { background:#1a1d24; padding:7px 16px; }
             QTabBar::tab:selected { background:#2aa5e0; color:white; }
             QScrollArea { background:#20242c; }
+            /* Vue « livre » : fond bois sombre + boutons de feuilletage */
+            QWidget#pagesRoot { background:#1a1410; }
+            QLabel#pageLabel { color:#e9dcbb; font-size:14px; font-weight:700; }
+            QPushButton#nav { background:#2a211a; color:#f4d100; border:1px solid #4a3c2c;
+                border-radius:20px; min-width:40px; min-height:40px; font-size:18px;
+                font-weight:800; }
+            QPushButton#nav:hover { background:#3a2e22; }
+            QPushButton#nav:disabled { color:#5a5045; border-color:#2a241c; }
         """)
 
     # ----------------------------------------------------------- logique
@@ -386,29 +413,94 @@ class MainWindow(QtWidgets.QMainWindow):
                                      drawEdges=True, edgeColor=(0, 0, 0, 0.4))
                 self.view.addItem(item); self._gl_items.append(item)
 
-    # ----------------------------------------------------------- aperçu 2D
+    # ----------------------------------------------------------- aperçu 2D (livre)
     def _on_tab_change(self, idx):
         if idx == 1:
             self._refresh_sheets()
 
     def _refresh_sheets(self):
-        # vide
-        while self.sheets_layout.count():
-            it = self.sheets_layout.takeAt(0)
-            if it.widget():
-                it.widget().deleteLater()
+        n = len(self.slices)
+        self._page_index = 0 if n == 0 else max(0, min(self._page_index, n - 1))
+        self._show_page()
+
+    def _flip(self, d):
         if not self.slices:
-            self.sheets_layout.addWidget(QtWidgets.QLabel("Aucune tranche à afficher."))
             return
-        tmp = tempfile.mkdtemp(prefix="laserslice_")
-        files = sc.export_svg(self.slices, self._params(), os.path.join(tmp, "planche"))
-        for f in files:
-            lbl = QtWidgets.QLabel(os.path.basename(f)); lbl.setStyleSheet("color:#9fb;")
-            self.sheets_layout.addWidget(lbl)
-            w = QSvgWidget(f)
-            w.setFixedHeight(360)
-            self.sheets_layout.addWidget(w)
-        self.sheets_layout.addStretch(1)
+        self._page_index = max(0, min(self._page_index + d, len(self.slices) - 1))
+        self._show_page()
+
+    def _show_page(self):
+        n = len(self.slices)
+        self.btn_prev.setEnabled(n > 0 and self._page_index > 0)
+        self.btn_next.setEnabled(n > 0 and self._page_index < n - 1)
+        if n == 0:
+            self.lbl_page.setText("Aucune pièce — importe un modèle 3D")
+            svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 640">'
+                   '<rect width="520" height="640" fill="none"/></svg>')
+        else:
+            s = self.slices[self._page_index]
+            self.lbl_page.setText(f"Pièce {self._page_index + 1} / {n}   ·   {s.label}")
+            svg = self._slice_page_svg(s)
+        self.page_view.load(QtCore.QByteArray(svg.encode("utf-8")))
+
+    def _ring_d(self, coords, T):
+        pts = [T(x, y) for x, y in coords]
+        return "M" + " L".join(f"{px:.2f},{py:.2f}" for px, py in pts) + " Z"
+
+    def _slice_page_svg(self, s):
+        """Rend une tranche comme une page de livre stylée (SVG, sans filtres :
+        QtSvg ne les gère pas -> ombres simulées par des formes)."""
+        polys = [p for p in sc._as_polygon_list(s.polygon) if p.area > 1e-9]
+        PX0, PY0, PW, PH = 92, 118, 320, 400
+        if polys:
+            minx = min(p.bounds[0] for p in polys)
+            miny = min(p.bounds[1] for p in polys)
+            maxx = max(p.bounds[2] for p in polys)
+            maxy = max(p.bounds[3] for p in polys)
+            pw = max(maxx - minx, 1e-6); ph = max(maxy - miny, 1e-6)
+            scale = min(PW / pw, PH / ph) * 0.92
+            ox = PX0 + (PW - pw * scale) / 2.0
+            oy = PY0 + (PH - ph * scale) / 2.0
+            T = lambda x, y: (ox + (x - minx) * scale, oy + (maxy - y) * scale)
+            rings = []
+            for p in polys:
+                rings.append(self._ring_d(p.exterior.coords, T))
+                for r in p.interiors:
+                    rings.append(self._ring_d(r.coords, T))
+            shape = "".join(
+                f'<path d="{d}" fill="#8a6f3d" fill-opacity="0.16" '
+                f'stroke="#2b2b2b" stroke-width="1.4" stroke-linejoin="round"/>'
+                for d in rings)
+        else:
+            shape = ('<text x="252" y="330" font-size="15" fill="#8a7a55" '
+                     'text-anchor="middle">(tranche vide)</text>')
+        return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 640">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8f0da"/><stop offset="1" stop-color="#e7d7b0"/>
+    </linearGradient>
+    <linearGradient id="spine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0000003a"/><stop offset="1" stop-color="#00000000"/>
+    </linearGradient>
+    <linearGradient id="curl" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d9c79c"/><stop offset="1" stop-color="#b7a171"/>
+    </linearGradient>
+  </defs>
+  <rect x="58" y="52" width="404" height="536" rx="10" fill="#000000" opacity="0.38"/>
+  <rect x="50" y="44" width="404" height="536" rx="10" fill="url(#paper)"
+        stroke="#cdb98a" stroke-width="1"/>
+  <rect x="50" y="44" width="26" height="536" fill="url(#spine)"/>
+  <rect x="74" y="104" width="356" height="430" rx="6" fill="none"
+        stroke="#cdb98a" stroke-opacity="0.6" stroke-width="1"/>
+  <text x="88" y="92" font-size="30" font-family="Georgia, serif"
+        fill="#3a2f1c" font-weight="bold">{s.label}</text>
+  <text x="430" y="92" font-size="12" fill="#6b5b38" text-anchor="end">LaserSlice</text>
+  {shape}
+  <path d="M454 580 L454 550 L424 580 Z" fill="url(#curl)"
+        stroke="#a88f5f" stroke-width="0.8"/>
+  <text x="252" y="566" font-size="12" fill="#6b5b38"
+        text-anchor="middle">à découper — trait noir = coupe</text>
+</svg>'''
 
     # ----------------------------------------------------------- exports
     def on_export(self):
