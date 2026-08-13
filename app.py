@@ -443,6 +443,7 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(self, "Erreur", f"Chargement impossible :\n{e}")
             return
         self.lbl_info.setText(os.path.basename(path))
+        self._reset_cam = True     # replacer la caméra de profil pour ce modèle
         self.recompute()
 
     # --- glisser-déposer d'un fichier 3D dans la fenêtre ---
@@ -490,6 +491,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 txt += f"  (limité à {nb} : côtes trop serrées pour l'épaisseur)"
         self.lbl_info.setText(txt)
         self.btn_apply.setEnabled(True)
+        # À l'ouverture d'un modèle : caméra placée « de profil » pour voir la
+        # silhouette (la colonne de face), comme sur les photos de puzzles.
+        if getattr(self, "_reset_cam", False):
+            self._reset_cam = False
+            cols = [s for s in slices if s.group == "A"]
+            if cols:
+                azimuth = 90 if cols[0].axis == "y" else 0   # regard le long de l'axe largeur
+                self.view.setCameraPosition(elevation=14, azimuth=azimuth)
         self._refresh_view()
         if self.tabs.currentIndex() == 1:
             self._refresh_sheets()
