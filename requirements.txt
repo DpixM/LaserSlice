@@ -3,6 +3,7 @@ numpy>=1.24
 shapely>=2.0
 networkx>=3.0
 scipy>=1.10
+mapbox-earcut>=1.0    # triangulation : indispensable pour afficher les tranches en 3D
 PySide6>=6.5
 pyqtgraph>=0.13
 PyOpenGL>=3.1
