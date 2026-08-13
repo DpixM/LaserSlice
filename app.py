@@ -522,13 +522,16 @@ class MainWindow(QtWidgets.QMainWindow):
                                      drawEdges=True, edgeColor=(0, 0, 0, 0.4))
                 item.setDepthValue(0)
                 self.view.addItem(item); self._gl_items.append(item)
-        # 2) Le modèle fantôme translucide EN DERNIER, pour qu'il se fonde
-        #    par-dessus sans faire clignoter les pièces qui sont à l'intérieur.
+        # 2) Le modèle fantôme en FIL DE FER (contours seulement) : il montre la
+        #    silhouette du modèle sans jamais cacher les pièces qui sont dedans
+        #    (une colonne pleine au centre restait invisible avec des faces pleines).
         if self.chk_ghost.isChecked() and self.prepared is not None:
             md = gl.MeshData(vertexes=self.prepared.vertices, faces=self.prepared.faces)
-            ghost = gl.GLMeshItem(meshdata=md, smooth=True, color=COLOR_GHOST,
-                                  glOptions="translucent", shader="shaded")
-            ghost.setDepthValue(10)
+            ghost = gl.GLMeshItem(meshdata=md, smooth=False,
+                                  drawFaces=False, drawEdges=True,
+                                  edgeColor=(0.60, 0.66, 0.80, 0.35),
+                                  glOptions="opaque")
+            ghost.setDepthValue(-10)
             self.view.addItem(ghost); self._gl_items.append(ghost)
 
     # ----------------------------------------------------------- aperçu 2D (livre)
