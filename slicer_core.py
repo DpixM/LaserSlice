@@ -543,27 +543,14 @@ def export_calibration_svg(params: SliceParams, out_path: str) -> str:
 
 def assembled_meshes(slices: List[Slice], explode: float = 0.0):
     """Renvoie une liste de (Trimesh, group) pour l'aperçu 3D des pièces.
-    `explode` écarte les pièces le long de leur normale ; en plus, les colonnes
-    (groupe A) sont soulevées vers le haut pour ne pas rester cachées au centre."""
-    built = []
+    `explode` écarte chaque pièce le long de sa normale. La colonne centrale
+    (pos = 0) reste en place, les côtes s'en écartent : on voit bien le montage."""
+    out = []
     for s in slices:
         m = s.to_extruded_mesh()
-        if m is not None:
-            built.append((s, m))
-    if not built:
-        return []
-
-    # taille caractéristique du modèle (pour doser le soulèvement des colonnes)
-    mins = np.min([m.bounds[0] for _, m in built], axis=0)
-    maxs = np.max([m.bounds[1] for _, m in built], axis=0)
-    size = float(np.max(maxs - mins)) or 1.0
-
-    out = []
-    for s, m in built:
+        if m is None:
+            continue
         if explode:
-            vec = np.array(_AXIS_NORMAL[s.axis], dtype=float) * (s.pos * explode)
-            if s.group == "A":                      # colonne(s) : on les fait monter
-                vec = vec + np.array([0.0, 0.0, 1.0]) * explode * 0.18 * size
-            m.apply_translation(vec)
+            m.apply_translation(np.array(_AXIS_NORMAL[s.axis], dtype=float) * (s.pos * explode))
         out.append((m, s.group))
     return out
