@@ -70,6 +70,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle("LaserSlice — 3D vers tranches SVG")
         self.resize(1180, 760)
+        self.setAcceptDrops(True)   # glisser-déposer d'un fichier 3D
 
         self.mesh = None            # maillage original chargé
         self.prepared = None        # maillage préparé (centré/redimensionné)
@@ -104,7 +105,7 @@ class MainWindow(QtWidgets.QMainWindow):
         tl.addWidget(self.btn_export)
         tl.addWidget(self.btn_calib)
         tl.addStretch(1)
-        self.lbl_info = QtWidgets.QLabel("Aucun modèle chargé")
+        self.lbl_info = QtWidgets.QLabel("Aucun modèle — glisse un fichier 3D ici, ou clique Importer")
         tl.addWidget(self.lbl_info)
         root.addWidget(top)
 
@@ -232,6 +233,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cmb_axis.currentIndexChanged.connect(self._auto_recompute)
         self.chk_dowel.stateChanged.connect(self._auto_recompute)
 
+        self.cmb_method.setCurrentIndex(1)   # démarre directement en mode Squelette
         self._on_method_change()
         return panel
 
@@ -291,7 +293,19 @@ class MainWindow(QtWidgets.QMainWindow):
                 padding:9px; border-radius:6px; font-weight:700; }
             QPushButton#apply:hover { background:#3ab4ef; }
             QComboBox, QSpinBox, QDoubleSpinBox { background:#1a1d24;
-                border:1px solid #2b303a; border-radius:4px; padding:3px; }
+                border:1px solid #2b303a; border-radius:4px;
+                padding:3px 22px 3px 6px; min-height:22px; }
+            /* boutons +/- des réglages : géométrie explicite (sinon le + ne se clique pas) */
+            QSpinBox::up-button, QDoubleSpinBox::up-button {
+                subcontrol-origin: border; subcontrol-position: top right;
+                width:20px; border-left:1px solid #2b303a; background:#2a2e38; }
+            QSpinBox::down-button, QDoubleSpinBox::down-button {
+                subcontrol-origin: border; subcontrol-position: bottom right;
+                width:20px; border-left:1px solid #2b303a; background:#2a2e38; }
+            QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+            QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover { background:#3a4150; }
+            QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed,
+            QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed { background:#2aa5e0; }
             QTabBar::tab { background:#1a1d24; padding:7px 16px; }
             QTabBar::tab:selected { background:#2aa5e0; color:white; }
             QScrollArea { background:#20242c; }
@@ -336,12 +350,16 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.chk_auto.isChecked():
             self.recompute()
 
+    _EXTS = (".stl", ".obj", ".ply", ".off", ".glb", ".gltf")
+
     def on_import(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, "Importer un modèle 3D", "",
             "Modèles 3D (*.stl *.obj *.ply *.off *.glb *.gltf);;Tous (*.*)")
-        if not path:
-            return
+        if path:
+            self._load_path(path)
+
+    def _load_path(self, path):
         try:
             self.mesh = sc.load_mesh(path)
         except Exception as e:
@@ -349,6 +367,21 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.lbl_info.setText(os.path.basename(path))
         self.recompute()
+
+    # --- glisser-déposer d'un fichier 3D dans la fenêtre ---
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls() and any(
+                u.toLocalFile().lower().endswith(self._EXTS) for u in e.mimeData().urls()):
+            e.acceptProposedAction()
+        else:
+            e.ignore()
+
+    def dropEvent(self, e):
+        for u in e.mimeData().urls():
+            p = u.toLocalFile()
+            if p.lower().endswith(self._EXTS):
+                self._load_path(p)
+                break
 
     def recompute(self):
         if self.mesh is None:
