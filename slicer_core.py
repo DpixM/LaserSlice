@@ -186,6 +186,21 @@ def section_polygon(mesh: trimesh.Trimesh, axis: str, pos: float) -> Optional[Po
     return _loops_to_polygon(loops)
 
 
+def _clean_poly(geom):
+    """Nettoie une géométrie après les découpes : supprime les micro-fentes /
+    slivers de largeur ~0 laissés par les opérations booléennes en flottant."""
+    if geom is None or getattr(geom, "is_empty", True):
+        return geom
+    try:
+        from shapely import set_precision
+        geom = set_precision(geom, 1e-3)      # arrondit à 1 µm : tue les slivers
+    except Exception:
+        pass
+    if not geom.is_valid:
+        geom = geom.buffer(0)
+    return geom
+
+
 def _loops_to_polygon(loops: Sequence[np.ndarray]) -> Optional[Polygon | MultiPolygon]:
     """Assemble des boucles fermées en polygone(s), en gérant les trous (règle even-odd)."""
     raw = []
@@ -323,7 +338,7 @@ def slice_skeleton(mesh: trimesh.Trimesh, params: SliceParams) -> List[Slice]:
                 continue
             zc = 0.5 * (iv[0] + iv[1])
             poly = poly.difference(box(rp - w / 2, zc, rp + w / 2, iv[1] + 1.0))
-        spines[sp] = poly
+        spines[sp] = _clean_poly(poly)
 
     # Côtes (local u = largeur, v = hauteur) : encoche par le BAS à chaque colonne.
     for rp, poly in list(ribs.items()):
@@ -333,7 +348,7 @@ def slice_skeleton(mesh: trimesh.Trimesh, params: SliceParams) -> List[Slice]:
                 continue
             zc = 0.5 * (iv[0] + iv[1])
             poly = poly.difference(box(sp - w / 2, iv[0] - 1.0, sp + w / 2, zc))
-        ribs[rp] = poly
+        ribs[rp] = _clean_poly(poly)
 
     slices: List[Slice] = []
     for i, sp in enumerate(sorted(spines)):

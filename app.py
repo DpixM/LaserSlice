@@ -65,6 +65,42 @@ class SliceWorker(QtCore.QThread):
             self.failed.emit(traceback.format_exc())
 
 
+class OrbitView(gl.GLViewWidget):
+    """Vue 3D où le CLIC DROIT fait tourner la caméra (le clic gauche déplace,
+    la molette zoome). Plus besoin de tenir le clic gauche pour pivoter."""
+
+    def _pos(self, ev):
+        return ev.position() if hasattr(ev, "position") else ev.localPos()
+
+    def mousePressEvent(self, ev):
+        self._last = self._pos(ev)
+        ev.accept()
+
+    def mouseMoveEvent(self, ev):
+        pos = self._pos(ev)
+        last = getattr(self, "_last", pos)
+        dx, dy = pos.x() - last.x(), pos.y() - last.y()
+        self._last = pos
+        btns = ev.buttons()
+        if btns & QtCore.Qt.RightButton:
+            self.orbit(-dx, dy)                     # clic droit = pivoter
+        elif btns & (QtCore.Qt.LeftButton | QtCore.Qt.MiddleButton):
+            self._safe_pan(dx, dy)                  # clic gauche = déplacer
+        ev.accept()
+
+    def _safe_pan(self, dx, dy):
+        for rel in ("view", True):
+            try:
+                self.pan(dx, dy, 0, relative=rel)
+                return
+            except Exception:
+                continue
+        try:
+            self.pan(dx, dy, 0)
+        except Exception:
+            pass
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -241,7 +277,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tabs = QtWidgets.QTabWidget()
 
         # -- onglet 3D --
-        self.view = gl.GLViewWidget()
+        self.view = OrbitView()
         self.view.setBackgroundColor((28, 32, 40))
         self.view.setCameraPosition(distance=180, elevation=18, azimuth=-60)
         grid = gl.GLGridItem(); grid.scale(10, 10, 10); grid.setDepthValue(10)
@@ -293,19 +329,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 padding:9px; border-radius:6px; font-weight:700; }
             QPushButton#apply:hover { background:#3ab4ef; }
             QComboBox, QSpinBox, QDoubleSpinBox { background:#1a1d24;
-                border:1px solid #2b303a; border-radius:4px;
-                padding:3px 22px 3px 6px; min-height:22px; }
-            /* boutons +/- des réglages : géométrie explicite (sinon le + ne se clique pas) */
+                border:1px solid #2b303a; border-radius:4px; padding:2px 6px;
+                min-height:26px; }
+            /* flèches +/- : plus larges (donc bien cliquables), rendu natif conservé */
             QSpinBox::up-button, QDoubleSpinBox::up-button {
-                subcontrol-origin: border; subcontrol-position: top right;
-                width:20px; border-left:1px solid #2b303a; background:#2a2e38; }
+                subcontrol-position: top right; width:20px; }
             QSpinBox::down-button, QDoubleSpinBox::down-button {
-                subcontrol-origin: border; subcontrol-position: bottom right;
-                width:20px; border-left:1px solid #2b303a; background:#2a2e38; }
-            QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
-            QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover { background:#3a4150; }
-            QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed,
-            QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed { background:#2aa5e0; }
+                subcontrol-position: bottom right; width:20px; }
             QTabBar::tab { background:#1a1d24; padding:7px 16px; }
             QTabBar::tab:selected { background:#2aa5e0; color:white; }
             QScrollArea { background:#20242c; }
