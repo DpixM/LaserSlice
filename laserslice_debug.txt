@@ -1,0 +1,7 @@
+total slices = 6
+  C01 grp=A axis=y pos=0.00 aire=238.4 -> EXTRUSION = None
+  R01 grp=B axis=x pos=-6.67 aire=371.0 -> 44v 84f  bounds=[-8.2,-10.0,-10.0]..[-5.2,10.0,10.0]
+  R02 grp=B axis=x pos=-3.33 aire=355.5 -> 88v 172f  bounds=[-4.8,-10.0,-10.0]..[-1.8,10.0,10.0]
+  R03 grp=B axis=x pos=0.00 aire=353.0 -> 90v 176f  bounds=[-1.5,-10.0,-10.0]..[1.5,10.0,10.0]
+  R04 grp=B axis=x pos=3.33 aire=359.6 -> 82v 160f  bounds=[1.8,-10.0,-10.0]..[4.8,10.0,10.0]
+  R05 grp=B axis=x pos=6.67 aire=371.0 -> 44v 84f  bounds=[5.2,-10.0,-10.0]..[8.2,10.0,10.0]

@@ -53,6 +53,36 @@ class SliceParams:
 
 
 # -----------------------------------------------------------------------------
+# Extrusion robuste (l'aperçu 3D ne doit jamais faire disparaître une pièce)
+# -----------------------------------------------------------------------------
+
+def _extrude_safe(geom, height: float):
+    """Extrude un polygone en volume. La triangulation peut échouer selon la
+    version des libs quand le contour a des parois fines (ex. colonne à encoches)
+    -> on retente avec plusieurs nettoyages du contour avant d'abandonner."""
+    ops = [
+        lambda g: g,
+        lambda g: g.buffer(0),
+        lambda g: g.simplify(0.02).buffer(0),
+        lambda g: g.buffer(-0.03).buffer(0.05),   # arrondit/épaissit les parois fines
+    ]
+    for op in ops:
+        try:
+            g = op(geom)
+        except Exception:
+            continue
+        if g is None or g.is_empty:
+            continue
+        try:
+            m = trimesh.creation.extrude_polygon(g, height=height)
+        except Exception:
+            m = None
+        if m is not None and len(m.faces) > 0:
+            return m
+    return None
+
+
+# -----------------------------------------------------------------------------
 # Représentation d'une tranche
 # -----------------------------------------------------------------------------
 
@@ -83,9 +113,8 @@ class Slice:
         if not polys:
             return None
         geom = polys[0] if len(polys) == 1 else MultiPolygon(polys)
-        try:
-            m = trimesh.creation.extrude_polygon(geom, height=self._thickness)
-        except Exception:
+        m = _extrude_safe(geom, self._thickness)
+        if m is None:
             return None
         # extrude_polygon crée l'objet dans le plan XY, extrudé en +Z, base en z=0.
         # On le replace dans l'orientation/position de la tranche.
@@ -319,9 +348,14 @@ def slice_skeleton(mesh: trimesh.Trimesh, params: SliceParams) -> List[Slice]:
     # modèle, les encoches fusionnent et la pièce part en bouillie. On limite donc
     # le nombre pour garder un espacement >= 1.8 × la largeur de fente.
     min_gap = max(params.slot_width + 0.6, 1e-6)   # largeur de fente + paroi mini 0,6 mm
-    n_ribs = max(1, min(n_ribs, int((bx[1][li] - bx[0][li]) / min_gap) or 1))
+
+    def _fit(span):
+        # espacement des pièces = span / (n + 1) ; on veut >= min_gap
+        return max(1, int(span / min_gap - 1 + 1e-9))
+
+    n_ribs = max(1, min(n_ribs, _fit(bx[1][li] - bx[0][li])))
     if n_spines > 1:
-        n_spines = max(1, min(n_spines, int((bx[1][wi] - bx[0][wi]) / min_gap) or 1))
+        n_spines = max(1, min(n_spines, _fit(bx[1][wi] - bx[0][wi])))
 
     rib_pos = _interior_positions(bx[0][li], bx[1][li], n_ribs)
     if n_spines == 1:
