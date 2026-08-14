@@ -7,6 +7,3 @@ dist/
 .venv/
 venv/
 .DS_Store
-
-laserslice_debug.txt
-laserslice_erreur.txt

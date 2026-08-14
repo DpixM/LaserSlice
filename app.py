@@ -209,6 +209,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.spn_n.setRange(1, 200); self.spn_n.setValue(12)
         form.addRow("Nb tranches / côtes", self.spn_n)
 
+        self.chk_auto_ribs = QtWidgets.QCheckBox("Auto : maximum qui tient")
+        self.chk_auto_ribs.toggled.connect(self._on_auto_ribs)
+        form.addRow("", self.chk_auto_ribs)
+
         self.spn_ny = QtWidgets.QSpinBox()
         self.spn_ny.setRange(1, 5); self.spn_ny.setValue(1)
         self.row_ny_label = QtWidgets.QLabel("Nb colonnes")
@@ -303,6 +307,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cmb_axis.setToolTip("Sens d'empilement des couches (méthode Tranches empilées uniquement).")
         self.spn_n.setToolTip("Nombre de tranches (empilé) ou de côtes (squelette).\nPlus élevé = plus détaillé, mais plus de pièces à assembler.")
         self.spn_ny.setToolTip("Nombre de colonnes vertébrales (squelette).\n1 pour un corps fin, 2-3 pour un corps large.")
+        self.chk_auto_ribs.setToolTip("Met automatiquement le maximum de côtes qui tiennent\nsans que les encoches se chevauchent (selon épaisseur + taille).")
         self.spn_thick.setToolTip("Épaisseur réelle de ta planche (contreplaqué/MDF).\nMesure-la au pied à coulisse. Elle fixe la largeur des fentes.")
         self.spn_kerf.setToolTip("Largeur du trait brûlé par le laser (~0,1 à 0,3 mm).\nSert à ajuster la largeur des fentes pour un bon serrage.")
         self.spn_fit.setToolTip("Serrage des fentes : + = plus lâche, − = plus serré.\nRègle-le grâce à la pièce de calibration.")
@@ -419,6 +424,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # "Nb colonnes" seulement pour le squelette
         self.spn_ny.setVisible(skeleton)
         self.row_ny_label.setVisible(skeleton)
+        self.chk_auto_ribs.setVisible(skeleton)
         # axe d'empilement + tige : seulement pour l'empilé
         self.cmb_axis.setEnabled(not skeleton)
         self.chk_dowel.setVisible(not skeleton)
@@ -461,9 +467,26 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._load_path(p)
                 break
 
+    def _on_auto_ribs(self, checked):
+        # en mode auto, l'utilisateur ne règle plus le nombre à la main
+        self.spn_n.setEnabled(not checked)
+        self.recompute()
+
     def recompute(self):
         if self.mesh is None:
             return
+        # Mode « Auto : maximum qui tient » : on calcule le nb de côtes max
+        # possible pour l'épaisseur et la taille du modèle, et on l'applique.
+        if (self.cmb_method.currentIndex() == 1
+                and getattr(self, "chk_auto_ribs", None) is not None
+                and self.chk_auto_ribs.isChecked()):
+            try:
+                mx = sc.max_skeleton_ribs(self.mesh, self._params())
+                self.spn_n.blockSignals(True)
+                self.spn_n.setValue(mx)
+                self.spn_n.blockSignals(False)
+            except Exception:
+                pass
         if self.worker and self.worker.isRunning():
             self._pending = True     # relancera avec les derniers paramètres à la fin
             return

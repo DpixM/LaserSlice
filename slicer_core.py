@@ -405,6 +405,18 @@ def slice_skeleton(mesh: trimesh.Trimesh, params: SliceParams) -> List[Slice]:
     return slices
 
 
+def max_skeleton_ribs(mesh: trimesh.Trimesh, params: SliceParams) -> int:
+    """Nombre maximum de côtes qui tiennent le long du corps sans que les
+    encoches de la colonne se chevauchent (selon épaisseur/kerf/jeu et taille)."""
+    prepared = prepare_mesh(mesh, params)
+    ext = prepared.extents
+    length_axis = "x" if ext[0] >= ext[1] else "y"
+    li = "xyz".index(length_axis)
+    span = float(prepared.bounds[1][li] - prepared.bounds[0][li])
+    min_gap = max(params.slot_width + 0.6, 1e-6)
+    return max(1, int(span / min_gap - 1 + 1e-9))
+
+
 def _interior_positions(lo: float, hi: float, n: int) -> List[float]:
     """n positions réparties à l'intérieur de [lo, hi], sans toucher les bords."""
     n = max(1, n)
