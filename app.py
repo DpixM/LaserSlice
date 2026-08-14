@@ -526,9 +526,11 @@ class MainWindow(QtWidgets.QMainWindow):
             for m, group in sc.assembled_meshes(self.slices, explode=explode):
                 md = gl.MeshData(vertexes=m.vertices, faces=m.faces)
                 color = COLOR_A if group == "A" else COLOR_B
+                # shader=None => couleur plate et vive (pas d'ombrage qui noircit
+                # la pièce selon son orientation). Les arêtes noires gardent le relief.
                 item = gl.GLMeshItem(meshdata=md, smooth=False, color=color,
-                                     glOptions="opaque", shader="shaded",
-                                     drawEdges=True, edgeColor=(0, 0, 0, 0.4))
+                                     glOptions="opaque", shader=None,
+                                     drawEdges=True, edgeColor=(0, 0, 0, 0.5))
                 item.setDepthValue(0)
                 self.view.addItem(item); self._gl_items.append(item)
         # 2) Le modèle fantôme en FIL DE FER (contours seulement) : il montre la
