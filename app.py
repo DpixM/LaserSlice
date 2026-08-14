@@ -482,25 +482,6 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.slices = slices
         self.prepared = prepared
-        # --- mouchard de diagnostic : écrit ce que le moteur produit ---
-        try:
-            dbg = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               "laserslice_debug.txt")
-            with open(dbg, "w", encoding="utf-8") as f:
-                f.write(f"total slices = {len(slices)}\n")
-                for s in slices:
-                    m = s.to_extruded_mesh()
-                    if m is None:
-                        info = "EXTRUSION = None"
-                    else:
-                        b = m.bounds
-                        info = (f"{len(m.vertices)}v {len(m.faces)}f  "
-                                f"bounds=[{b[0][0]:.1f},{b[0][1]:.1f},{b[0][2]:.1f}]"
-                                f"..[{b[1][0]:.1f},{b[1][1]:.1f},{b[1][2]:.1f}]")
-                    f.write(f"  {s.label} grp={s.group} axis={s.axis} "
-                            f"pos={s.pos:.2f} aire={s.polygon.area:.1f} -> {info}\n")
-        except Exception:
-            pass
         na = sum(1 for s in slices if s.group == "A")
         nb = sum(1 for s in slices if s.group == "B")
         txt = f"{len(slices)} pièces" if nb else f"{len(slices)} tranches"
