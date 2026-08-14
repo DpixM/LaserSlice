@@ -209,12 +209,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.spn_n.setRange(1, 200); self.spn_n.setValue(12)
         form.addRow("Nb tranches / côtes", self.spn_n)
 
-        self.chk_auto_ribs = QtWidgets.QCheckBox("Auto : maximum qui tient")
+        self.chk_auto_ribs = QtWidgets.QCheckBox("Grille auto (recommandé)")
+        self.chk_auto_ribs.setChecked(True)
         self.chk_auto_ribs.toggled.connect(self._on_auto_ribs)
         form.addRow("", self.chk_auto_ribs)
 
         self.spn_ny = QtWidgets.QSpinBox()
-        self.spn_ny.setRange(1, 5); self.spn_ny.setValue(1)
+        self.spn_ny.setRange(1, 50); self.spn_ny.setValue(1)
         self.row_ny_label = QtWidgets.QLabel("Nb colonnes")
         form.addRow(self.row_ny_label, self.spn_ny)
 
@@ -307,7 +308,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cmb_axis.setToolTip("Sens d'empilement des couches (méthode Tranches empilées uniquement).")
         self.spn_n.setToolTip("Nombre de tranches (empilé) ou de côtes (squelette).\nPlus élevé = plus détaillé, mais plus de pièces à assembler.")
         self.spn_ny.setToolTip("Nombre de colonnes vertébrales (squelette).\n1 pour un corps fin, 2-3 pour un corps large.")
-        self.chk_auto_ribs.setToolTip("Met automatiquement le maximum de côtes qui tiennent\nsans que les encoches se chevauchent (selon épaisseur + taille).")
+        self.chk_auto_ribs.setToolTip("Choisit automatiquement le nombre de côtes ET de colonnes\npour couvrir tout le modèle en grille régulière (façon Autodesk Slicer).")
         self.spn_thick.setToolTip("Épaisseur réelle de ta planche (contreplaqué/MDF).\nMesure-la au pied à coulisse. Elle fixe la largeur des fentes.")
         self.spn_kerf.setToolTip("Largeur du trait brûlé par le laser (~0,1 à 0,3 mm).\nSert à ajuster la largeur des fentes pour un bon serrage.")
         self.spn_fit.setToolTip("Serrage des fentes : + = plus lâche, − = plus serré.\nRègle-le grâce à la pièce de calibration.")
@@ -468,8 +469,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 break
 
     def _on_auto_ribs(self, checked):
-        # en mode auto, l'utilisateur ne règle plus le nombre à la main
+        # en mode grille auto, l'utilisateur ne règle plus les nombres à la main
         self.spn_n.setEnabled(not checked)
+        self.spn_ny.setEnabled(not checked)
         self.recompute()
 
     def recompute(self):
@@ -481,10 +483,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 and getattr(self, "chk_auto_ribs", None) is not None
                 and self.chk_auto_ribs.isChecked()):
             try:
-                mx = sc.max_skeleton_ribs(self.mesh, self._params())
-                self.spn_n.blockSignals(True)
-                self.spn_n.setValue(mx)
-                self.spn_n.blockSignals(False)
+                nr, ns = sc.auto_grid_counts(self.mesh, self._params())
+                self.spn_n.blockSignals(True); self.spn_n.setValue(nr); self.spn_n.blockSignals(False)
+                self.spn_ny.blockSignals(True); self.spn_ny.setValue(ns); self.spn_ny.blockSignals(False)
             except Exception:
                 pass
         if self.worker and self.worker.isRunning():

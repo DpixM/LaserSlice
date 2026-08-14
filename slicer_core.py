@@ -421,6 +421,27 @@ def max_skeleton_ribs(mesh: trimesh.Trimesh, params: SliceParams) -> int:
     return max(1, int(span / min_gap - 1 + 1e-9))
 
 
+def auto_grid_counts(mesh: trimesh.Trimesh, params: SliceParams) -> Tuple[int, int]:
+    """Choisit (nb_côtes, nb_colonnes) pour une grille régulière qui couvre tout
+    le modèle (façon Autodesk Slicer), sans que les encoches se chevauchent."""
+    prepared = prepare_mesh(mesh, params)
+    ext = prepared.extents
+    length_axis = "x" if ext[0] >= ext[1] else "y"
+    width_axis = "y" if length_axis == "x" else "x"
+    li = "xyz".index(length_axis)
+    wi = "xyz".index(width_axis)
+    span_l = float(prepared.bounds[1][li] - prepared.bounds[0][li])
+    span_w = float(prepared.bounds[1][wi] - prepared.bounds[0][wi])
+    min_gap = max(params.slot_width + 0.6, 1e-6)
+    spacing = max(float(max(ext)) / 14.0, min_gap)   # ~14 tranches sur la + grande dim
+
+    def count(span):
+        cap = max(1, int(span / min_gap - 1 + 1e-9))     # limite anti-chevauchement
+        return max(1, min(int(round(span / spacing)), cap))
+
+    return count(span_l), count(span_w)
+
+
 def _interior_positions(lo: float, hi: float, n: int) -> List[float]:
     """n positions réparties à l'intérieur de [lo, hi], sans toucher les bords."""
     n = max(1, n)
