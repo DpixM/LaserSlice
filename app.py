@@ -276,7 +276,7 @@ class MainWindow(QtWidgets.QMainWindow):
         exp_row.addWidget(QtWidgets.QLabel("Éclaté"))
         self.sld_explode = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.sld_explode.setRange(0, 600); self.sld_explode.setValue(0)
-        self.sld_explode.valueChanged.connect(self._refresh_view)
+        self.sld_explode.valueChanged.connect(self._apply_explode)
         exp_row.addWidget(self.sld_explode)
         lay.addLayout(exp_row)
 
@@ -541,24 +541,29 @@ class MainWindow(QtWidgets.QMainWindow):
             self.view.removeItem(it)
         self._gl_items = []
 
+    _AXIS_VEC = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}
+
     def _refresh_view(self, *_):
+        """Reconstruit la scène 3D. Les pièces sont extrudées UNE fois ici ; le
+        curseur Éclaté ne fait ensuite que les déplacer (voir _apply_explode),
+        pour rester fluide même avec beaucoup de pièces."""
         self._clear_gl()
+        self._piece_items = []          # (item, normale, pos) pour l'éclaté
         # 1) Les PIÈCES opaques d'abord (elles écrivent le tampon de profondeur).
         if self.chk_slices.isChecked() and self.slices:
-            explode = self.sld_explode.value() / 100.0
-            for m, group in sc.assembled_meshes(self.slices, explode=explode):
+            for s in self.slices:
+                m = s.to_extruded_mesh()
+                if m is None:
+                    continue
                 md = gl.MeshData(vertexes=m.vertices, faces=m.faces)
-                color = COLOR_A if group == "A" else COLOR_B
-                # shader=None => couleur plate et vive (pas d'ombrage qui noircit
-                # la pièce selon son orientation). Les arêtes noires gardent le relief.
+                color = COLOR_A if s.group == "A" else COLOR_B
                 item = gl.GLMeshItem(meshdata=md, smooth=False, color=color,
                                      glOptions="opaque", shader=None,
                                      drawEdges=True, edgeColor=(0, 0, 0, 0.5))
                 item.setDepthValue(0)
                 self.view.addItem(item); self._gl_items.append(item)
-        # 2) Le modèle fantôme en FIL DE FER (contours seulement) : il montre la
-        #    silhouette du modèle sans jamais cacher les pièces qui sont dedans
-        #    (une colonne pleine au centre restait invisible avec des faces pleines).
+                self._piece_items.append((item, self._AXIS_VEC[s.axis], s.pos))
+        # 2) Le modèle fantôme en FIL DE FER (contours seulement).
         if self.chk_ghost.isChecked() and self.prepared is not None:
             md = gl.MeshData(vertexes=self.prepared.vertices, faces=self.prepared.faces)
             ghost = gl.GLMeshItem(meshdata=md, smooth=False,
@@ -567,6 +572,16 @@ class MainWindow(QtWidgets.QMainWindow):
                                   glOptions="opaque")
             ghost.setDepthValue(-10)
             self.view.addItem(ghost); self._gl_items.append(ghost)
+        self._apply_explode()
+
+    def _apply_explode(self, *_):
+        """Déplace les pièces déjà construites selon le curseur Éclaté (rapide)."""
+        explode = self.sld_explode.value() / 100.0
+        for item, normal, pos in getattr(self, "_piece_items", []):
+            item.resetTransform()
+            if explode:
+                d = pos * explode
+                item.translate(normal[0] * d, normal[1] * d, normal[2] * d)
 
     # ----------------------------------------------------------- aperçu 2D (livre)
     def _on_tab_change(self, idx):
