@@ -112,10 +112,14 @@ class Slice:
         polys = [p for p in polys if p.area > 1e-6]
         if not polys:
             return None
-        geom = polys[0] if len(polys) == 1 else MultiPolygon(polys)
-        m = _extrude_safe(geom, self._thickness)
-        if m is None:
+        # On extrude CHAQUE morceau séparément : si une tranche traverse plusieurs
+        # bouts distincts (corps + pattes + tête), un morceau capricieux ne fait
+        # plus échouer toute la pièce.
+        parts = [pm for pm in (_extrude_safe(p, self._thickness) for p in polys)
+                 if pm is not None]
+        if not parts:
             return None
+        m = parts[0] if len(parts) == 1 else trimesh.util.concatenate(parts)
         # extrude_polygon crée l'objet dans le plan XY, extrudé en +Z, base en z=0.
         # On le replace dans l'orientation/position de la tranche.
         m.apply_transform(self._placement_matrix())
